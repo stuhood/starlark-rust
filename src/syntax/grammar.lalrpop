@@ -118,6 +118,8 @@ SimpleStmt<S>: AstStatement =
 SmallStmt: AstStatement = {
     <l:@L> "return" <e:TestList?> <r:@R>
         => Statement::Return(e).to_ast(file_span.subspan(l, r)),
+    <l:@L> "yield" <e:TestList?> <r:@R>
+        => Statement::Yield(e).to_ast(file_span.subspan(l, r)),
     <@L> "break" <@R>
         => Statement::Break.to_ast(file_span.subspan(<>)),
     <@L> "continue" <@R>
@@ -361,6 +363,7 @@ extern {
       "pass" => lexer::Token::Pass,
       "elif" => lexer::Token::Elif,
       "return" => lexer::Token::Return,
+      "yield" => lexer::Token::Yield,
       // Symbols
       "," => lexer::Token::Comma,
       ";" => lexer::Token::Semicolon,

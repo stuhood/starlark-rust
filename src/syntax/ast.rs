@@ -235,6 +235,7 @@ pub enum Statement {
     Continue,
     Pass,
     Return(Option<AstExpr>),
+    Yield(Option<AstExpr>),
     Expression(AstExpr),
     Assign(AstExpr, AssignOp, AstExpr),
     Statements(Vec<AstStatement>),
@@ -538,6 +539,8 @@ impl Statement {
             Statement::Pass => write!(f, "{}pass\n", tab),
             Statement::Return(Some(ref e)) => write!(f, "{}return {}\n", tab, e.node),
             Statement::Return(None) => write!(f, "{}return\n", tab),
+            Statement::Yield(Some(ref e)) => write!(f, "{}yield {}\n", tab, e.node),
+            Statement::Yield(None) => write!(f, "{}yield\n", tab),
             Statement::Expression(ref e) => write!(f, "{}{}\n", tab, e.node),
             Statement::Assign(ref l, ref op, ref r) => {
                 write!(f, "{}{}{}{}\n", tab, l.node, op, r.node)

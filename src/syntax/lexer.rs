@@ -113,6 +113,7 @@ pub enum Token {
     Pass,     // "pass" keyword
     Elif,     // "elif" keyword
     Return,   // "return" keyword
+    Yield,    // "yield" keyword
     // Symbols
     Comma,            // ','
     Semicolon,        // ';'
@@ -174,6 +175,7 @@ impl fmt::Display for Token {
             &Token::Pass => write!(f, "keyword 'pass'"),
             &Token::Elif => write!(f, "keyword 'elif'"),
             &Token::Return => write!(f, "keyword 'return'"),
+            &Token::Yield => write!(f, "keyword 'yield'"),
             &Token::Comma => write!(f, "symbol ','"),
             &Token::Semicolon => write!(f, "symbol ';'"),
             &Token::Colon => write!(f, "symbol ':'"),
@@ -494,8 +496,9 @@ impl Lexer {
             "pass" => Token::Pass,
             "elif" => Token::Elif,
             "return" => Token::Return,
+            "yield" => Token::Yield,
             "as" | "import" | "assert" | "is" | "class" | "nonlocal" | "del" | "raise"
-            | "except" | "try" | "finally" | "while" | "from" | "with" | "global" | "yield" => {
+            | "except" | "try" | "finally" | "while" | "from" | "with" | "global" => {
                 Token::Reserved(identifier.to_owned())
             }
             _ => Token::Identifier(identifier.to_owned()),
@@ -1176,7 +1179,7 @@ mod tests {
     #[test]
     fn test_keywords() {
         let r = collect_result(
-            "and else load break for not not  in continue if or def in pass elif return",
+            "and else load break for not not  in continue if or def in pass elif return yield",
         );
         assert_eq!(
             &[
@@ -1195,6 +1198,7 @@ mod tests {
                 Token::Pass,
                 Token::Elif,
                 Token::Return,
+                Token::Yield,
                 Token::Newline,
             ],
             &r[..]
@@ -1205,7 +1209,7 @@ mod tests {
     fn test_reserved() {
         let r = collect_result(
             "as import assert is class nonlocal del raise except try finally \
-             while from with global yield",
+             while from with global",
         );
         assert_eq!(
             &[
@@ -1224,7 +1228,6 @@ mod tests {
                 Token::Reserved("from".to_owned()),
                 Token::Reserved("with".to_owned()),
                 Token::Reserved("global".to_owned()),
-                Token::Reserved("yield".to_owned()),
                 Token::Newline,
             ],
             &r[..]

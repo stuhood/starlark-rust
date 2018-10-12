@@ -52,6 +52,8 @@ pub const INCORRECT_LEFT_VALUE_ERROR_CODE: &'static str = "CE03";
 pub const INCORRECT_UNPACK_ERROR_CODE: &'static str = "CE04";
 #[doc(hidden)]
 pub const RECURSION_ERROR_CODE: &'static str = "CE05";
+#[doc(hidden)]
+pub const YIELD_ERROR_CODE: &'static str = "CE06";
 
 #[doc(hidden)]
 #[derive(Debug, Clone)]
@@ -60,6 +62,7 @@ pub enum EvalException {
     Break(Span),
     Continue(Span),
     Return(Span, Value),
+    Yield(Span, Value),
     // Error bubbling up as diagnostics
     DiagnosedError(Diagnostic),
     // Expression used as left value cannot be assigned
@@ -121,6 +124,18 @@ impl Into<Diagnostic> for EvalException {
                     label: None,
                 }],
             },
+
+            EvalException::Yield(s, ..) => Diagnostic {
+                level: Level::Error,
+                message: "Yield statement used outside of a function call".to_owned(),
+                code: Some(YIELD_ERROR_CODE.to_owned()),
+                spans: vec![SpanLabel {
+                    span: s,
+                    style: SpanStyle::Primary,
+                    label: None,
+                }],
+            },
+
             EvalException::IncorrectLeftValue(s) => Diagnostic {
                 level: Level::Error,
                 message: "Incorrect expression as left value".to_owned(),
@@ -691,6 +706,10 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
                 Err(EvalException::Return(self.span, e.eval(context)?))
             }
             Statement::Return(None) => Err(EvalException::Return(self.span, Value::new(None))),
+            Statement::Yield(Some(ref e)) => {
+                Err(EvalException::Yield(self.span, e.eval(context)?))
+            }
+            Statement::Yield(None) => Err(EvalException::Yield(self.span, Value::new(None))),
             Statement::Expression(ref e) => e.eval(context),
             Statement::Assign(ref lhs, AssignOp::Assign, ref rhs) => {
                 let rhs = rhs.eval(context)?;
