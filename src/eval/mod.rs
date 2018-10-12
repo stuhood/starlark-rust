@@ -19,6 +19,7 @@ use environment::Environment;
 use linked_hash_map::LinkedHashMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, Mutex};
 use syntax::ast::*;
 use syntax::errors::SyntaxError;
@@ -161,6 +162,26 @@ impl Into<Diagnostic> for EvalException {
     }
 }
 
+/// Represents the state necesary to "cheaply" resume a statement after a more deeply nested
+/// statement triggers suspension. A queue of StatementSuspensions represents a particular path
+/// taken through an `eval` "tree", and consuming that queue in a new call to `eval` should result
+/// in resumption of the `eval`.
+#[doc(hidden)]
+enum StatementSuspension {
+    For,
+    If(bool),
+    IfElse,
+    Statements,
+}
+
+struct SuspensionQueue(VecDeque<StatementSuspension>);
+
+impl fmt::Debug for SuspensionQueue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SuspensionQueue({})", self.0.len())
+    }
+}
+
 /// A trait for loading file using the load statement path.
 pub trait FileLoader: Clone {
     /// Open the file given by the load statement `path`.
@@ -173,6 +194,7 @@ pub struct EvaluationContext<T: FileLoader> {
     env: Environment,
     loader: T,
     call_stack: Vec<(String, String)>,
+    suspension_queue: Option<SuspensionQueue>,
     map: Arc<Mutex<CodeMap>>,
 }
 
@@ -182,6 +204,22 @@ impl<T: FileLoader> EvaluationContext<T> {
             call_stack: Vec::new(),
             env,
             loader,
+            suspension_queue: None,
+            map,
+        }
+    }
+
+    fn new_resuming_from(
+        env: Environment,
+        loader: T,
+        map: Arc<Mutex<CodeMap>>,
+        suspension_queue: SuspensionQueue,
+    ) -> Self {
+        EvaluationContext {
+            call_stack: Vec::new(),
+            env,
+            loader,
+            suspension_queue,
             map,
         }
     }
@@ -192,6 +230,14 @@ impl<T: FileLoader> EvaluationContext<T> {
             call_stack: self.call_stack.clone(),
             loader: (),
             map: self.map.clone(),
+        }
+    }
+
+    fn suspension_pop(&mut self) -> Option<StatementSuspension> {
+        if let Some(ref sq) = self.suspension_queue {
+            self.suspension.pop_left()
+        } else {
+            None
         }
     }
 }
@@ -689,7 +735,12 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
                 lhs.set(context, t!(l.percent(r), self)?)
             }
             Statement::If(ref cond, ref st) => {
-                if cond.eval(context)?.to_bool() {
+                let cond_res = match context.suspension.pop() {
+                    Some(StatementSuspension::If(cond_res)) => cond_res,
+                    None => cond.eval(context)?.to_bool(),
+                    Some(x) => panic!("Mismatched suspension: `If` vs `{:?}`", x),
+                };
+                if cond_res {
                     st.eval(context)
                 } else {
                     Ok(Value::new(None))
