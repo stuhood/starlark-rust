@@ -19,7 +19,7 @@ use environment::Environment;
 use linked_hash_map::LinkedHashMap;
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
-use std::fmt;
+use std::{fmt, mem};
 use std::sync::{Arc, Mutex};
 use syntax::ast::*;
 use syntax::errors::SyntaxError;
@@ -167,15 +167,24 @@ impl Into<Diagnostic> for EvalException {
 /// taken through an `eval` "tree", and consuming that queue in a new call to `eval` should result
 /// in resumption of the `eval`.
 #[doc(hidden)]
-#[derive(Debug, Clone)]
 pub enum StatementSuspension {
     For(Box<Iterator<Item=Value>>),
     If(bool),
-    IfElse,
-    Statements,
+    // IfElse: TODO,
+    Statements(usize),
 }
 
-struct SuspensionQueue(VecDeque<StatementSuspension>);
+macro_rules! suspension_pop {
+    ($ctx: expr, $slug: expr, $typ: tt, $initializer: block) => {
+        match $ctx.suspension_pop() {
+            Some(StatementSuspension::$typ(res)) => res,
+            None => { $initializer },
+            Some(x) => panic!("Mismatched suspension: `{}` vs `{:?}`", { $slug }, mem::discriminant(&x)),
+        }
+    };
+}
+
+pub struct SuspensionQueue(VecDeque<StatementSuspension>);
 
 impl fmt::Debug for SuspensionQueue {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -215,7 +224,9 @@ impl<T: FileLoader> EvaluationContext<T> {
             env: self.env.child(name),
             call_stack: self.call_stack.clone(),
             loader: (),
-            suspension_queue: self.suspension_queue.clone(),
+            // NB: A suspension queue is only valid for a single scope (generally, a `def` body),
+            // and does not extend into nested scopes which would not support suspension.
+            suspension_queue: None,
             map: self.map.clone(),
         }
     }
@@ -722,11 +733,9 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
                 lhs.set(context, t!(l.percent(r), self)?)
             }
             Statement::If(ref cond, ref st) => {
-                let cond_res = match context.suspension_pop() {
-                    Some(StatementSuspension::If(cond_res)) => cond_res,
-                    None => cond.eval(context)?.to_bool(),
-                    Some(x) => panic!("Mismatched suspension: `If` vs `{:?}`", x),
-                };
+                let cond_res = suspension_pop!(context, "If", If, {
+                    cond.eval(context)?.to_bool()
+                });
                 if cond_res {
                     st.eval(context)
                 } else {
@@ -747,14 +756,10 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
                 },
                 ref st,
             ) => {
-                let iterator = match context.suspension_pop() {
-                    Some(StatementSuspension::For(iterator)) => iterator,
-                    None => {
-                      let iterable = e2.eval(context)?;
-                      t!(iterable.into_iter(), span * span)?
-                    },
-                    Some(x) => panic!("Mismatched suspension: `For` vs `{:?}`", x),
-                };
+                let mut iterator = suspension_pop!(context, "For", For, {
+                    let iterable = e2.eval(context)?;
+                    t!(iterable.into_iter(), span * span)?
+                });
                 for v in iterator {
                     e1.set(context, v)?;
                     match st.eval(context) {
@@ -804,11 +809,12 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
                 Ok(Value::new(None))
             }
             Statement::Statements(ref v) => {
-                let r = eval_vector!(v, context);
-                match r.len() {
-                    0 => Ok(Value::new(None)),
-                    _ => Ok(r.last().unwrap().clone()),
+                let idx = suspension_pop!(context, "Statements", Statements, { 0 });
+                let mut last = None;
+                for s in &v[idx..] {
+                    last = Some(s.eval(context)?);
                 }
+                Ok(last.map(|l| l.clone()).unwrap_or_else(|| Value::new(None)))
             }
         }
     }

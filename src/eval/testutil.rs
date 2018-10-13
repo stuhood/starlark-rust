@@ -16,7 +16,7 @@
 use codemap::CodeMap;
 use codemap_diagnostic::{ColorConfig, Diagnostic, Emitter};
 use environment;
-use eval::{self, StatementSuspension};
+use eval::{self, StatementSuspension, SuspensionQueue};
 use std::sync;
 use syntax::parser::parse_stmt;
 use values::TypedValue;
@@ -42,11 +42,11 @@ pub fn starlark_empty_no_diagnostic(snippet: &str) -> Result<bool, Diagnostic> {
 }
 
 /// Execute a starlark snippet representing a def body with the given suspension queue.
-pub fn starlark_resume(snippet: &str, suspension_queue: &[StatementSuspension]) -> Result<bool, Diagnostic> {
+pub fn starlark_resume(snippet: &str, suspension_queue: Vec<StatementSuspension>) -> Result<bool, Diagnostic> {
     let map = sync::Arc::new(sync::Mutex::new(CodeMap::new()));
     let env = environment::Environment::new("test");
     let ast_statement = parse_stmt(&map, "<test>", snippet)?;
-    let suspension_queue = suspension_queue.iter().cloned().collect();
+    let suspension_queue = SuspensionQueue(suspension_queue.into_iter().collect());
     Ok(eval::eval_resume(&vec![], &ast_statement, env, suspension_queue, map)?.to_bool())
 }
 

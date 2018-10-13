@@ -14,6 +14,7 @@
 
 use eval::testutil::{self, starlark_resume};
 use eval::{RECURSION_ERROR_CODE, StatementSuspension};
+use values::Value;
 
 #[test]
 fn arithmetic_test() {
@@ -98,5 +99,26 @@ fn resume_if() {
     assert!(starlark_resume("\
 if 0/0:
     return 1
-", &[StatementSuspension::If(true)]).unwrap());
+", vec![StatementSuspension::If(true)]).unwrap());
+}
+
+#[test]
+fn resume_for() {
+    let iter = vec![1].into_iter().map(Value::new);
+    assert!(starlark_resume("\
+for x in [0, 1]:
+    return 1/x
+", vec![StatementSuspension::For(Box::new(iter))]).unwrap());
+}
+
+#[test]
+fn resume_if_statements() {
+    assert!(starlark_resume("\
+if 1:
+    this_is_undefined
+    return 1
+", vec![
+    StatementSuspension::If(true),
+    StatementSuspension::Statements(1),
+  ]).unwrap());
 }
