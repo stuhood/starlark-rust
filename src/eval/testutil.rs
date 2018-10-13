@@ -42,7 +42,7 @@ pub fn starlark_empty_no_diagnostic(snippet: &str) -> Result<bool, Diagnostic> {
 }
 
 /// Execute a starlark snippet representing a def body with the given suspension queue.
-pub fn starlark_resume(snippet: &str, suspension_queue: Vec<StatementSuspension>) -> Result<bool, Diagnostic> {
+pub fn starlark_resume_empty(snippet: &str, suspension_queue: Vec<StatementSuspension>) -> Result<bool, Diagnostic> {
     let map = sync::Arc::new(sync::Mutex::new(CodeMap::new()));
     let env = environment::Environment::new("test");
     let ast_statement = parse_stmt(&map, "<test>", snippet)?;
@@ -84,4 +84,11 @@ macro_rules! starlark_ok {
 /// Test that the execution of a starlark code raise an error
 macro_rules! starlark_fail {
     ($($t:expr),+) => (starlark_fail_fn!(testutil::starlark_empty_no_diagnostic, $($t),+))
+}
+
+/// A simple macro to resume eval of a Starlark snippet and fail if it evaluates to false.
+macro_rules! starlark_resume_ok {
+    ($t: expr, $($suspensions:expr),+) => {
+        assert!(testutil::starlark_resume_empty($t, vec![$($suspensions),+]).unwrap());
+    };
 }

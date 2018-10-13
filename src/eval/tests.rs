@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use eval::testutil::{self, starlark_resume};
+use eval::testutil;
 use eval::{RECURSION_ERROR_CODE, StatementSuspension};
 use values::Value;
 
@@ -96,39 +96,44 @@ def rec6(): rec2()
 
 #[test]
 fn resume_if() {
-    assert!(starlark_resume("\
+    const F: &'static str = "\
 if 0/0:
     return 1
-", vec![StatementSuspension::If(true)]).unwrap());
+";
+    starlark_resume_ok!(F, StatementSuspension::If(true));
 }
 
 #[test]
 fn resume_ifelse() {
-    assert!(starlark_resume("\
+    const F: &'static str = "\
 if 0/0:
     return 1
 else:
     return 0
-", vec![StatementSuspension::IfElse(true)]).unwrap());
+";
+    starlark_resume_ok!(F, StatementSuspension::IfElse(true));
 }
 
 #[test]
 fn resume_for() {
-    let iter = vec![1].into_iter().map(Value::new);
-    assert!(starlark_resume("\
+    const F: &'static str = "\
 for x in [0, 1]:
     return 1/x
-", vec![StatementSuspension::For(Box::new(iter))]).unwrap());
+";
+    let iter = vec![1].into_iter().map(Value::new);
+    starlark_resume_ok!(F, StatementSuspension::For(Box::new(iter)));
 }
 
 #[test]
 fn resume_if_statements() {
-    assert!(starlark_resume("\
+    const F: &'static str = "\
 if 1:
     this_is_undefined
     return 1
-", vec![
-    StatementSuspension::If(true),
-    StatementSuspension::Statements(1),
-  ]).unwrap());
+";
+    starlark_resume_ok!(
+        F,
+        StatementSuspension::If(true),
+        StatementSuspension::Statements(1)
+    );
 }
