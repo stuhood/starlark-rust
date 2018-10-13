@@ -169,7 +169,7 @@ impl Into<Diagnostic> for EvalException {
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 pub enum StatementSuspension {
-    For,
+    For(Box<Iterator<Item=Value>>),
     If(bool),
     IfElse,
     Statements,
@@ -747,8 +747,15 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
                 },
                 ref st,
             ) => {
-                let iterable = e2.eval(context)?;
-                for v in t!(iterable.into_iter(), span * span)? {
+                let iterator = match context.suspension_pop() {
+                    Some(StatementSuspension::For(iterator)) => iterator,
+                    None => {
+                      let iterable = e2.eval(context)?;
+                      t!(iterable.into_iter(), span * span)?
+                    },
+                    Some(x) => panic!("Mismatched suspension: `For` vs `{:?}`", x),
+                };
+                for v in iterator {
                     e1.set(context, v)?;
                     match st.eval(context) {
                         Err(EvalException::Break(..)) => break,
