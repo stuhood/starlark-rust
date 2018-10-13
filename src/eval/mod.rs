@@ -170,7 +170,7 @@ impl Into<Diagnostic> for EvalException {
 pub enum StatementSuspension {
     For(Box<Iterator<Item=Value>>),
     If(bool),
-    // IfElse: TODO,
+    IfElse(bool),
     Statements(usize),
 }
 
@@ -743,7 +743,10 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
                 }
             }
             Statement::IfElse(ref cond, ref st1, ref st2) => {
-                if cond.eval(context)?.to_bool() {
+                let cond_res = suspension_pop!(context, "IfElse", IfElse, {
+                    cond.eval(context)?.to_bool()
+                });
+                if cond_res {
                     st1.eval(context)
                 } else {
                     st2.eval(context)

@@ -103,6 +103,16 @@ if 0/0:
 }
 
 #[test]
+fn resume_ifelse() {
+    assert!(starlark_resume("\
+if 0/0:
+    return 1
+else:
+    return 0
+", vec![StatementSuspension::IfElse(true)]).unwrap());
+}
+
+#[test]
 fn resume_for() {
     let iter = vec![1].into_iter().map(Value::new);
     assert!(starlark_resume("\
