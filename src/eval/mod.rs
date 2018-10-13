@@ -56,13 +56,13 @@ pub const RECURSION_ERROR_CODE: &'static str = "CE05";
 pub const YIELD_ERROR_CODE: &'static str = "CE06";
 
 #[doc(hidden)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum EvalException {
     // Flow control statement reached
     Break(Span),
     Continue(Span),
     Return(Span, Value),
-    Yield(Span, Value),
+    Yield(Span, SuspensionQueue, Value),
     // Error bubbling up as diagnostics
     DiagnosedError(Diagnostic),
     // Expression used as left value cannot be assigned
@@ -199,6 +199,7 @@ macro_rules! suspension_pop {
     };
 }
 
+#[derive(Default)]
 pub struct SuspensionQueue(VecDeque<StatementSuspension>);
 
 impl fmt::Debug for SuspensionQueue {
@@ -707,9 +708,11 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
             }
             Statement::Return(None) => Err(EvalException::Return(self.span, Value::new(None))),
             Statement::Yield(Some(ref e)) => {
-                Err(EvalException::Yield(self.span, e.eval(context)?))
+                Err(EvalException::Yield(self.span, SuspensionQueue::default(), e.eval(context)?))
             }
-            Statement::Yield(None) => Err(EvalException::Yield(self.span, Value::new(None))),
+            Statement::Yield(None) => {
+              Err(EvalException::Yield(self.span, SuspensionQueue::default(), Value::new(None)))
+            }
             Statement::Expression(ref e) => e.eval(context),
             Statement::Assign(ref lhs, AssignOp::Assign, ref rhs) => {
                 let rhs = rhs.eval(context)?;
@@ -755,11 +758,20 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
                 let cond_res = suspension_pop!(context, "If", If, {
                     cond.eval(context)?.to_bool()
                 });
-                if cond_res {
-                    st.eval(context)
-                } else {
-                    Ok(Value::new(None))
-                }
+                {
+                  if cond_res {
+                      st.eval(context)
+                  } else {
+                      Ok(Value::new(None))
+                  }
+                }.map_err(|err| {
+                    if let EvalException::Yield(s, mut sq, v) = err {
+                        sq.0.push_back(StatementSuspension::If(cond_res));
+                        EvalException::Yield(s, sq, v)
+                    } else {
+                        err
+                    }
+                })
             }
             Statement::IfElse(ref cond, ref st1, ref st2) => {
                 let cond_res = suspension_pop!(context, "IfElse", IfElse, {
