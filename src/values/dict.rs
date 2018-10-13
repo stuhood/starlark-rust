@@ -191,8 +191,8 @@ impl TypedValue for Dictionary {
         })
     }
 
-    fn into_iter<'a>(&'a self) -> Result<Box<Iterator<Item = Value> + 'a>, ValueError> {
-        Ok(Box::new(self.content.iter().map(|x| x.0.clone())))
+    fn into_iter(&self) -> Result<Box<Iterator<Item = Value>>, ValueError> {
+        Ok(Box::new(self.content.clone().into_iter().map(|x| x.0)))
     }
 
     fn set_at(&mut self, index: Value, new_value: Value) -> Result<(), ValueError> {

@@ -525,7 +525,7 @@ pub trait TypedValue {
 
     /// Returns an iterator over the value of this container if this value hold an iterable
     /// container.
-    fn into_iter<'a>(&'a self) -> Result<Box<Iterator<Item = Value> + 'a>, ValueError>;
+    fn into_iter(&self) -> Result<Box<Iterator<Item = Value>>, ValueError>;
 
     /// Returns the length of the value, if this value is a sequence.
     fn length(&self) -> Result<i64, ValueError>;
@@ -1013,10 +1013,9 @@ impl TypedValue for Value {
         let borrowed = self.0.borrow_mut();
         borrowed.slice(start, stop, stride)
     }
-    fn into_iter<'a>(&'a self) -> Result<Box<Iterator<Item = Value> + 'a>, ValueError> {
+    fn into_iter(&self) -> Result<Box<Iterator<Item = Value>>, ValueError> {
         let borrowed = self.0.borrow();
-        let v: Vec<Value> = borrowed.into_iter()?.map(|x| x.clone()).collect();
-        Ok(Box::new(v.into_iter()))
+        Ok(Box::new(borrowed.into_iter()?))
     }
     fn length(&self) -> Result<i64, ValueError> {
         let borrowed = self.0.borrow();
