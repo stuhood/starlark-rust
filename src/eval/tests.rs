@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use eval::testutil;
-use eval::RECURSION_ERROR_CODE;
+use eval::testutil::{self, starlark_resume};
+use eval::{RECURSION_ERROR_CODE, StatementSuspension};
 
 #[test]
 fn arithmetic_test() {
@@ -91,4 +91,12 @@ def rec6(): rec2()
     starlark_fail!("def f(a, **kwargs, b=1): pass");
     starlark_fail!("def f(a, b=1, **kwargs, c=1): pass");
     starlark_fail!("def f(a, **kwargs, *args): pass");
+}
+
+#[test]
+fn resume_if() {
+    assert!(starlark_resume("\
+if 0/0:
+    return 1
+", &[StatementSuspension::If(true)]).unwrap());
 }

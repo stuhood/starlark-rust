@@ -14,7 +14,7 @@
 
 use super::ast::AstStatement;
 use super::errors::SyntaxError;
-use super::grammar::{BuildFileParser, StarlarkParser};
+use super::grammar::{BuildFileParser, StarlarkParser, StmtParser};
 use super::lexer::{Lexer, LexerError, LexerIntoIter, LexerItem, Token};
 use codemap::{CodeMap, Span};
 use codemap_diagnostic::{Diagnostic, Level, SpanLabel, SpanStyle};
@@ -206,6 +206,27 @@ pub fn parse(
 ) -> Result<AstStatement, Diagnostic> {
     let content2 = content.to_owned();
     parse_lexer(map, filename, content, build, Lexer::new(&content2))
+}
+
+/// TODO: This is copy-pasta to expose a Parser that supports loose top-level statements.
+#[doc(hidden)]
+pub fn parse_stmt(
+    map: &Arc<Mutex<CodeMap>>,
+    filename: &str,
+    content: &str,
+) -> Result<AstStatement, Diagnostic> {
+    let filespan = {
+        map.lock()
+            .unwrap()
+            .add_file(filename.to_string(), content.to_string())
+            .span
+    };
+    match {
+        StmtParser::new().parse(content, filespan, Lexer::new(content))
+    } {
+        Result::Ok(v) => Result::Ok(v),
+        Result::Err(p) => Result::Err(p.to_diagnostic(filespan)),
+    }
 }
 
 /// Parse a build file (if build is true) or a starlark file, reading the content from the file

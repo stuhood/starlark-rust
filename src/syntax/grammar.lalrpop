@@ -84,7 +84,7 @@ Suite: AstStatement = {
         => Statement::Statements(v).to_ast(file_span.subspan(l, r))
 };
 
-Stmt: AstStatement = { IfStmt, ForStmt, SimpleStmt<SmallStmt> };
+pub Stmt: AstStatement = { IfStmt, ForStmt, SimpleStmt<SmallStmt> };
 
 IfBody: AstStatement = ASTS<IfBody_>;
 IfBody_: Statement = <c:Test> ":" <s:Suite> <el:ElseStmt?> => {

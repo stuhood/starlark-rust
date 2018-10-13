@@ -16,8 +16,9 @@
 use codemap::CodeMap;
 use codemap_diagnostic::{ColorConfig, Diagnostic, Emitter};
 use environment;
-use eval;
+use eval::{self, StatementSuspension};
 use std::sync;
+use syntax::parser::parse_stmt;
 use values::TypedValue;
 
 /// Execute a starlark snippet with an empty environment.
@@ -38,6 +39,15 @@ pub fn starlark_empty_no_diagnostic(snippet: &str) -> Result<bool, Diagnostic> {
     let map = sync::Arc::new(sync::Mutex::new(CodeMap::new()));
     let mut env = environment::Environment::new("test");
     Ok(eval::simple::eval(&map, "<test>", snippet, false, &mut env)?.to_bool())
+}
+
+/// Execute a starlark snippet representing a def body with the given suspension queue.
+pub fn starlark_resume(snippet: &str, suspension_queue: &[StatementSuspension]) -> Result<bool, Diagnostic> {
+    let map = sync::Arc::new(sync::Mutex::new(CodeMap::new()));
+    let env = environment::Environment::new("test");
+    let ast_statement = parse_stmt(&map, "<test>", snippet)?;
+    let suspension_queue = suspension_queue.iter().cloned().collect();
+    Ok(eval::eval_resume(&vec![], &ast_statement, env, suspension_queue, map)?.to_bool())
 }
 
 /// A simple macro to execute a Starlark snippet and fails if the last statement is false.

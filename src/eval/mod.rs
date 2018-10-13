@@ -18,7 +18,7 @@ use codemap_diagnostic::{Diagnostic, Level, SpanLabel, SpanStyle};
 use environment::Environment;
 use linked_hash_map::LinkedHashMap;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::sync::{Arc, Mutex};
 use syntax::ast::*;
@@ -167,7 +167,8 @@ impl Into<Diagnostic> for EvalException {
 /// taken through an `eval` "tree", and consuming that queue in a new call to `eval` should result
 /// in resumption of the `eval`.
 #[doc(hidden)]
-enum StatementSuspension {
+#[derive(Debug, Clone)]
+pub enum StatementSuspension {
     For,
     If(bool),
     IfElse,
@@ -209,33 +210,19 @@ impl<T: FileLoader> EvaluationContext<T> {
         }
     }
 
-    fn new_resuming_from(
-        env: Environment,
-        loader: T,
-        map: Arc<Mutex<CodeMap>>,
-        suspension_queue: SuspensionQueue,
-    ) -> Self {
-        EvaluationContext {
-            call_stack: Vec::new(),
-            env,
-            loader,
-            suspension_queue,
-            map,
-        }
-    }
-
     fn child(&self, name: &str) -> EvaluationContext<()> {
         EvaluationContext {
             env: self.env.child(name),
             call_stack: self.call_stack.clone(),
             loader: (),
+            suspension_queue: self.suspension_queue.clone(),
             map: self.map.clone(),
         }
     }
 
     fn suspension_pop(&mut self) -> Option<StatementSuspension> {
-        if let Some(ref sq) = self.suspension_queue {
-            self.suspension.pop_left()
+        if let Some(ref mut sq) = self.suspension_queue {
+            sq.0.pop_front()
         } else {
             None
         }
@@ -735,7 +722,7 @@ impl<T: FileLoader + 'static> Evaluate<T> for AstStatement {
                 lhs.set(context, t!(l.percent(r), self)?)
             }
             Statement::If(ref cond, ref st) => {
-                let cond_res = match context.suspension.pop() {
+                let cond_res = match context.suspension_pop() {
                     Some(StatementSuspension::If(cond_res)) => cond_res,
                     None => cond.eval(context)?.to_bool(),
                     Some(x) => panic!("Mismatched suspension: `If` vs `{:?}`", x),
@@ -860,11 +847,35 @@ pub fn eval_def(
         call_stack: call_stack.clone(),
         env,
         loader: (),
+        suspension_queue: None,
         map: map.clone(),
     };
     match stmts.eval(&mut ctx) {
         Err(EvalException::Return(_s, ret)) => Ok(ret),
         Err(x) => Err(ValueError::DiagnosedError(x.into())),
+        Ok(..) => Ok(Value::new(None)),
+    }
+}
+
+/// A method for consumption by resuming generators
+#[doc(hidden)]
+pub fn eval_resume(
+    call_stack: &Vec<(String, String)>,
+    stmts: &AstStatement,
+    env: Environment,
+    suspension_queue: SuspensionQueue,
+    map: Arc<Mutex<CodeMap>>,
+) -> Result<Value, Diagnostic> {
+    let mut ctx = EvaluationContext {
+        call_stack: call_stack.clone(),
+        env,
+        loader: (),
+        suspension_queue: Some(suspension_queue),
+        map: map.clone(),
+    };
+    match stmts.eval(&mut ctx) {
+        Err(EvalException::Return(_s, ret)) => Ok(ret),
+        Err(x) => Err(x.into()),
         Ok(..) => Ok(Value::new(None)),
     }
 }
