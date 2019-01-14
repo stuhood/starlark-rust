@@ -28,47 +28,24 @@ pub struct Generator {
 }
 
 impl Generator {
-    pub fn new<F>(name: String, stmts: AstStatement, map: Arc<Mutex<CodeMap>>) -> Value {
-        Value::new(Function {
-            function: Box::new(f),
-            name: String,
+    pub fn new(
+        name: String,
+        stmts: AstStatement,
+        env: Environment,
+        map: Arc<Mutex<CodeMap>>,
+    ) -> Value {
+        Value::new(Generator {
+            name,
+            stmts,
+            env,
+            map,
         })
     }
-}
 
-/// Define the generator type
-impl TypedValue for Generator {
-    // TODO: Functions in starlark may not close over non-globals, and globals are immutable by the
-    // time a Function is called: therefore, they have no interior mutability. Generators, on the
-    // other hand, have internal mutable state and should support being frozen.
-    immutable!();
-    any!();
-
-    fn to_str(&self) -> String {
-        format!("<generator {}>", self.name)
-    }
-    fn to_repr(&self) -> String {
-        self.to_str()
-    }
-
-    not_supported!(to_int);
-    fn get_type(&self) -> &'static str {
-        "generator"
-    }
-    fn to_bool(&self) -> bool {
-        true
-    }
-    not_supported!(get_hash);
-
-    fn compare(&self, other: &Value, _recursion: u32) -> Result<Ordering, ValueError> {
-        if other.get_type() == "generator" {
-            Ok(self.to_repr().cmp(&other.to_repr()))
-        } else {
-            default_compare(self, other)
-        }
-    }
-
-    fn call(
+    ///
+    /// A combination of Python's Generator::send ...
+    ///
+    fn send(
         &self,
         call_stack: &Vec<(String, String)>,
         env: Environment,
@@ -161,6 +138,38 @@ impl TypedValue for Generator {
             env.child(&format!("{}#{}", env.name(), &self.to_str())),
             v,
         )
+    }
+}
+
+impl TypedValue for Generator {
+    // TODO: Functions in starlark may not close over non-globals, and globals are immutable by the
+    // time a Function is called: therefore, they have no interior mutability. Generators, on the
+    // other hand, have internal mutable state and should support being frozen.
+    immutable!();
+    any!();
+
+    fn to_str(&self) -> String {
+        format!("<generator {}>", self.name)
+    }
+    fn to_repr(&self) -> String {
+        self.to_str()
+    }
+
+    not_supported!(to_int);
+    fn get_type(&self) -> &'static str {
+        "generator"
+    }
+    fn to_bool(&self) -> bool {
+        true
+    }
+    not_supported!(get_hash);
+
+    fn compare(&self, other: &Value, _recursion: u32) -> Result<Ordering, ValueError> {
+        if other.get_type() == "generator" {
+            Ok(self.to_repr().cmp(&other.to_repr()))
+        } else {
+            default_compare(self, other)
+        }
     }
 
     not_supported!(binop);

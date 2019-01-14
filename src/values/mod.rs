@@ -1496,6 +1496,7 @@ impl Value {
 // Submodules
 pub mod dict;
 pub mod function;
+pub mod generator;
 pub mod list;
 pub mod string;
 pub mod tuple;

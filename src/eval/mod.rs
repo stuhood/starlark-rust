@@ -899,6 +899,7 @@ pub fn eval_def(
     };
     match stmts.eval(&mut ctx) {
         Err(EvalException::Return(_s, ret)) => Ok(ret),
+        Err(EvalException::Yield(_, queue, ret)) => Ok(Generator::new()),
         Err(x) => Err(ValueError::DiagnosedError(x.into())),
         Ok(..) => Ok(Value::new(None)),
     }
